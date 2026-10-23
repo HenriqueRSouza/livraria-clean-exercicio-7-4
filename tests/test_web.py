@@ -1,16 +1,16 @@
-"""C08–C10: navegação HTTP real pela interface Flask, persistindo em TXT temporário."""
+"""C08–C10: navegação HTTP pela interface Flask, gravando em um TXT temporário."""
 import tempfile
 import unittest
 from pathlib import Path
 
-from livraria.frameworks.web import create_app
+from app import criar_app
 
 
 class FluxoHTTPTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.app = create_app(str(Path(self.tmp.name) / "site.txt"))
+        self.app = criar_app(str(Path(self.tmp.name) / "site.txt"))
         self.app.testing = True
         self.web = self.app.test_client()
 
@@ -71,7 +71,7 @@ class FluxoHTTPTest(unittest.TestCase):
     def test_arquivo_txt_compartilhado_entre_apps(self):
         self.entrar()
         self.web.post("/reservar", data={"edicao_id": 1, "loja_id": 1})
-        outro = create_app(str(Path(self.tmp.name) / "site.txt")).test_client()
+        outro = criar_app(str(Path(self.tmp.name) / "site.txt")).test_client()
         self.assertIn("0 disponível(is)", outro.get("/livro/1").text)
 
 

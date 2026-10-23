@@ -1,6 +1,3 @@
-"""Apresentador: formata saídas dos casos de uso para exibição (independente de Flask)."""
-
-
 def reais(centavos):
     return f"R$ {centavos / 100:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 

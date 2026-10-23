@@ -1,18 +1,16 @@
-"""Entidades da livraria e regras que valem independentemente de interface ou armazenamento."""
-from __future__ import annotations
-
+"""Entities: entidades fundamentais da livraria e regras que não dependem de tela nem de armazenamento."""
 import re
 import unicodedata
 from dataclasses import dataclass, field
+from typing import Optional
 
-from livraria.entidades.erros import RegraInvalida
 
-TEXTO_AVALIACAO_MAX = 500
+class RegraInvalida(ValueError):
+    """Operação não permitida pela especificação."""
 
 
 def normalizar(texto):
-    return "".join(c for c in unicodedata.normalize("NFKD", str(texto)).casefold()
-                   if not unicodedata.combining(c))
+    return "".join(c for c in unicodedata.normalize("NFKD", str(texto)).casefold() if not unicodedata.combining(c))
 
 
 @dataclass
@@ -22,10 +20,6 @@ class Livro:
     autor: str
     genero: str
     sinopse: str
-
-    def corresponde(self, titulo="", autor="", genero=""):
-        return all(normalizar(termo) in normalizar(valor)
-                   for valor, termo in ((self.titulo, titulo), (self.autor, autor), (self.genero, genero)) if termo)
 
 
 @dataclass
@@ -46,11 +40,6 @@ class Promocao:
     ativa: bool
 
 
-def preco_promocional(edicao, promocoes):
-    """Preço da edição menos promoções ativas, nunca negativo."""
-    return max(0, edicao.preco_centavos - sum(p.desconto_centavos for p in promocoes if p.ativa))
-
-
 @dataclass
 class Loja:
     id: int
@@ -62,9 +51,6 @@ class Loja:
     servicos: str
     cafe: bool
     eventos: str
-
-    def no_bairro(self, bairro=""):
-        return normalizar(bairro) in normalizar(self.bairro)
 
 
 @dataclass
@@ -79,13 +65,6 @@ class Estoque:
             raise RegraInvalida("Sem estoque nesta unidade/edição.")
         self.quantidade -= 1
 
-    def repor(self):
-        self.quantidade += 1
-
-    @property
-    def esgotado(self):
-        return self.quantidade == 0
-
 
 @dataclass
 class Cliente:
@@ -93,7 +72,7 @@ class Cliente:
     nome: str
     email: str
     bairro: str
-    interesses: list[str] = field(default_factory=list)
+    interesses: list = field(default_factory=list)
 
     @classmethod
     def novo(cls, nome, email, bairro, interesses=""):
@@ -107,16 +86,18 @@ class Cliente:
 
 
 @dataclass
+class Favorito:
+    cliente_id: int
+    livro_id: int
+
+
+@dataclass
 class Cupom:
     codigo: str
     descricao: str
     tipo: str  # "percentual" ou "fixo"
     valor: int
     ativo: bool
-
-    @staticmethod
-    def normalizar_codigo(codigo):
-        return (codigo or "").strip().upper()
 
     def aplicar(self, preco_centavos):
         if not self.ativo:
@@ -131,30 +112,22 @@ class Reserva:
     cliente_id: int
     edicao_id: int
     loja_id: int
-    codigo: str | None
-    estado: str
+    codigo: str
+    estado: str  # confirmada, retirada ou cancelada
     preco_centavos: int
-    cupom: str | None = None
+    cupom: Optional[str] = None
 
-    @classmethod
-    def nova(cls, cliente_id, edicao_id, loja_id, preco_centavos, cupom=None):
-        return cls(0, cliente_id, edicao_id, loja_id, None, "confirmada", preco_centavos, cupom)
-
-    @staticmethod
-    def codigo_para(identificador):
-        return f"RES-{identificador:06d}"
-
-    def _exigir_confirmada_de(self, cliente_id):
+    def _confirmada_de(self, cliente_id):
         if self.estado != "confirmada" or self.cliente_id != cliente_id:
             raise RegraInvalida("Reserva inexistente, de outro cliente ou já finalizada.")
 
     def cancelar(self, cliente_id):
-        self._exigir_confirmada_de(cliente_id)
+        self._confirmada_de(cliente_id)
         self.estado = "cancelada"
 
     def retirar(self, cliente_id):
-        """Muda para retirada e devolve a compra correspondente, sem novo débito de estoque."""
-        self._exigir_confirmada_de(cliente_id)
+        """Vira compra sem novo débito de estoque."""
+        self._confirmada_de(cliente_id)
         self.estado = "retirada"
         return Compra(0, self.cliente_id, self.edicao_id, self.loja_id, self.preco_centavos, self.id, self.cupom)
 
@@ -166,22 +139,8 @@ class Compra:
     edicao_id: int
     loja_id: int
     preco_centavos: int
-    reserva_id: int | None = None
-    cupom: str | None = None
-
-    @property
-    def pontos(self):
-        return self.preco_centavos // 100
-
-
-def pontos_fidelidade(compras):
-    return sum(c.pontos for c in compras)
-
-
-def cupom_ja_usado(codigo, reservas, compras):
-    """Uso conta em reservas não canceladas e em compras diretas (retiradas herdam da reserva)."""
-    return (any(r.cupom == codigo and r.estado != "cancelada" for r in reservas)
-            or any(c.cupom == codigo and c.reserva_id is None for c in compras))
+    reserva_id: Optional[int] = None
+    cupom: Optional[str] = None
 
 
 @dataclass
@@ -191,20 +150,16 @@ class Avaliacao:
     nota: int
     texto: str
     autor: str
-    cliente_id: int | None = None
+    cliente_id: Optional[int] = None
 
     @staticmethod
     def validar(nota, texto):
-        if not isinstance(nota, int) or not 1 <= nota <= 5:
+        if not 1 <= nota <= 5:
             raise RegraInvalida("A nota deve ser um inteiro de 1 a 5.")
         texto = (texto or "").strip()
-        if len(texto) > TEXTO_AVALIACAO_MAX:
-            raise RegraInvalida(f"O texto da avaliação deve ter até {TEXTO_AVALIACAO_MAX} caracteres.")
+        if len(texto) > 500:
+            raise RegraInvalida("O texto da avaliação deve ter até 500 caracteres.")
         return nota, texto
-
-
-def media_notas(avaliacoes):
-    return round(sum(a.nota for a in avaliacoes) / len(avaliacoes), 1) if avaliacoes else None
 
 
 @dataclass
@@ -220,3 +175,15 @@ class Notificacao:
     cliente_id: int
     tipo: str
     mensagem: str
+
+
+def preco_promocional(edicao, promocoes):
+    return max(0, edicao.preco_centavos - sum(p.desconto_centavos for p in promocoes if p.ativa))
+
+
+def pontos(compras):
+    return sum(c.preco_centavos // 100 for c in compras)
+
+
+def media(avaliacoes):
+    return round(sum(a.nota for a in avaliacoes) / len(avaliacoes), 1) if avaliacoes else None

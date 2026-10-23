@@ -4,20 +4,21 @@
 
 ## Escopo e dados
 
-Aplicativo local Flask com persistência em arquivo texto. Na primeira execução (arquivo ausente ou vazio) o catálogo de demonstração é gravado; execuções seguintes preservam o conteúdo. IDs inteiros; preços em centavos (inteiros, exibidos em reais); datas UTC ISO 8601. Dados iniciais: dois títulos (um com duas edições), dois autores/gêneros, duas lojas de bairros diferentes, estoques independentes, sinopses, avaliações, promoção, serviços e evento. Dados criados pelo usuário persistem no arquivo TXT configurado em `LIVRARIA_TXT` (padrão `livraria.txt`), uma linha por registro no formato `<tipo>\t<json do registro>`. Testes usam repositórios em memória ou arquivos TXT temporários. Nenhuma API externa é chamada.
+Aplicativo local Flask com persistência em arquivo texto. Na primeira execução (arquivo ausente ou vazio) o catálogo de demonstração é gravado; execuções seguintes preservam o conteúdo. IDs inteiros; preços em centavos (inteiros, exibidos em reais); datas UTC ISO 8601. Dados iniciais: dois títulos (um com duas edições), dois autores/gêneros, duas lojas de bairros diferentes, estoques independentes, sinopses, avaliações, promoção, serviços e evento. Dados criados pelo usuário persistem no arquivo TXT configurado em `LIVRARIA_TXT` (padrão `livraria.txt`), uma linha por registro no formato `<tipo>\t<json do registro>`. Testes usam arquivos TXT temporários. Nenhuma API externa é chamada.
 
 Entidades: **Livro** (id, título, autor, gênero, sinopse); **Edição** (id, livro_id, nome, preço_centavos, ano); **Loja** (id, nome, bairro, endereço, horário, pagamentos, serviços, café booleano, eventos); **Estoque** (edicao_id, loja_id, quantidade >= 0, seção); **Avaliação** (id, livro_id, nota 1..5, texto até 500 caracteres, autor, cliente_id opcional); **Promoção** (edicao_id, descrição, desconto_centavos, ativa); **Cliente** (id, nome, email único, bairro, interesses como gêneros); **Favorito** (cliente_id, livro_id); **Reserva** (id, cliente_id, edicao_id, loja_id, código único, estado `confirmada`/`retirada`/`cancelada`, preço_centavos, cupom opcional); **Compra** (id, cliente_id, edicao_id, loja_id, preço_centavos, origem reserva opcional, cupom opcional); **Alerta** (cliente_id, edicao_id, loja_id); **Notificação** (cliente_id, tipo, mensagem); **Cupom** (código único, descrição, tipo `percentual`/`fixo`, valor, ativo). Unicidade e integridade referencial são garantidas pelos casos de uso.
 
 ## Arquitetura (Clean)
 
-Quatro anéis, dependências apontando sempre para dentro:
+Camadas com dependências sempre apontando para dentro (nomes das pastas seguem o slide da aula):
 
-1. `livraria/entidades` — entidades e regras corporativas puras (sem I/O).
-2. `livraria/casos_de_uso` — um caso de uso por operação e as **portas** (interfaces abstratas de repositórios e Unidade de Trabalho). Dependem apenas das entidades.
-3. `livraria/adaptadores` — controladores/apresentadores sem Flask e implementações das portas (registros em memória e em arquivo TXT).
-4. `livraria/frameworks` — Flask, templates, driver de arquivo (gravação atômica + trava) e raiz de composição.
+1. `livraria/entities` — entidades fundamentais e regras puras (preço, cupom, pontos, transições da reserva).
+2. `livraria/use_cases` — lógica de negócio (`Catalogo`, `Clientes`, `Pedidos`) e a interface `RepositorioLivraria` (DIP). Dependem só das entidades.
+3. `livraria/controllers` — recebem os dados da UI, chamam os casos de uso e devolvem dados/mensagens para a tela.
+4. `livraria/infrastructure` — `RepositorioTxt`, que implementa `RepositorioLivraria` gravando em arquivo texto.
+5. `livraria/ui` — rotas Flask e template. `app.py` monta as dependências.
 
-Operações que verificam e alteram estoque executam dentro de uma Unidade de Trabalho: ou todas as alterações são confirmadas, ou nenhuma é gravada.
+Operações que verificam e alteram estoque rodam dentro de `repo.transacao()`: ou todas as alterações são gravadas, ou nenhuma.
 
 ## Regras e operações
 
