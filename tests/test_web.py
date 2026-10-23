@@ -42,6 +42,38 @@ class FluxoHTTPTest(unittest.TestCase):
         resposta = self.web.post("/comprar", data={"edicao_id": 2, "loja_id": 1}, follow_redirects=True)
         self.assertIn("Sem estoque", resposta.text)
 
+    def entrar(self):
+        self.web.post("/cadastro", data={"nome": "Ana", "email": "ana@example.com", "bairro": "Centro", "interesses": "Ficção"})
+
+    def test_c09_avaliacao_pela_interface(self):
+        self.assertIn("Entre na sua área para avaliar", self.web.get("/livro/1").text)
+        self.entrar()
+        resposta = self.web.post("/avaliar/1", data={"nota": "4", "texto": "Gostei"}, follow_redirects=True)
+        self.assertIn("Avaliação registrada", resposta.text)
+        self.assertIn("4,5", resposta.text)
+        self.assertIn("Atualizar minha avaliação", resposta.text)
+        self.assertIn("Gostei", self.web.get("/cliente").text)
+        resposta = self.web.post("/avaliar/1", data={"nota": "9"}, follow_redirects=True)
+        self.assertIn("nota deve ser", resposta.text)
+        resposta = self.web.post("/avaliar/1", data={"nota": "abc"}, follow_redirects=True)
+        self.assertIn("Dados do formulário inválidos", resposta.text)
+
+    def test_c10_cupom_pela_interface(self):
+        self.entrar()
+        resposta = self.web.post("/reservar", data={"edicao_id": 1, "loja_id": 2, "cupom": "leitura10"}, follow_redirects=True)
+        self.assertIn("R$ 36,00 com cupom LEITURA10", resposta.text)
+        self.assertIn("(cupom LEITURA10)", resposta.text)
+        resposta = self.web.post("/comprar", data={"edicao_id": 1, "loja_id": 2, "cupom": "LEITURA10"}, follow_redirects=True)
+        self.assertIn("já utilizado", resposta.text)
+        resposta = self.web.post("/comprar", data={"edicao_id": 1, "loja_id": 2, "cupom": ""}, follow_redirects=True)
+        self.assertIn("R$ 40,00 (sem cobrança real)", resposta.text)
+
+    def test_arquivo_txt_compartilhado_entre_apps(self):
+        self.entrar()
+        self.web.post("/reservar", data={"edicao_id": 1, "loja_id": 1})
+        outro = create_app(str(Path(self.tmp.name) / "site.txt")).test_client()
+        self.assertIn("0 disponível(is)", outro.get("/livro/1").text)
+
 
 if __name__ == "__main__":
     unittest.main()
