@@ -1,10 +1,23 @@
 # Livraria — especificação da demonstração (fonte única de verdade)
 
+> Exercício 7.4 (Lab 07): evolução do exercício 6 para **Arquitetura Clean**, com persistência em **arquivo TXT** e núcleo independente de tecnologia via **DIP**. Inclui as features R07 (avaliações de clientes) e R08 (cupons de desconto).
+
 ## Escopo e dados
 
-Aplicativo local Flask + SQLite. `init_db(caminho)` cria esquema e catálogo de demonstração idempotentemente. IDs inteiros; preços em centavos (inteiros, exibidos em reais); datas UTC ISO 8601. Dados iniciais: dois títulos (um com duas edições), dois autores/gêneros, duas lojas de bairros diferentes, estoques independentes, sinopses, avaliações, promoção, serviços e evento. Dados criados pelo usuário persistem no arquivo SQLite configurado em `LIVRARIA_DB` (padrão `livraria.db`). Testes usam bancos temporários. Nenhuma API externa é chamada.
+Aplicativo local Flask com persistência em arquivo texto. Na primeira execução (arquivo ausente ou vazio) o catálogo de demonstração é gravado; execuções seguintes preservam o conteúdo. IDs inteiros; preços em centavos (inteiros, exibidos em reais); datas UTC ISO 8601. Dados iniciais: dois títulos (um com duas edições), dois autores/gêneros, duas lojas de bairros diferentes, estoques independentes, sinopses, avaliações, promoção, serviços e evento. Dados criados pelo usuário persistem no arquivo TXT configurado em `LIVRARIA_TXT` (padrão `livraria.txt`), uma linha por registro no formato `<tipo>\t<json do registro>`. Testes usam repositórios em memória ou arquivos TXT temporários. Nenhuma API externa é chamada.
 
-Entidades: **Livro** (id, título, autor, gênero, sinopse); **Edição** (id, livro_id, nome, preço_centavos, ano); **Loja** (id, nome, bairro, endereço, horário, pagamentos, serviços, café booleano, eventos); **Estoque** (edicao_id, loja_id, quantidade >= 0, seção); **Avaliação** (livro_id, nota 1..5, texto, autor); **Promoção** (edicao_id, descrição, desconto_centavos, ativa); **Cliente** (id, nome, email único, bairro, interesses como gêneros); **Favorito** (cliente_id, livro_id); **Reserva** (id, cliente_id, edicao_id, loja_id, código único, estado `confirmada`/`retirada`/`cancelada`, preço_centavos); **Compra** (id, cliente_id, edicao_id, loja_id, preço_centavos, origem reserva opcional); **Alerta** (cliente_id, edicao_id, loja_id); **Notificação** (cliente_id, tipo, mensagem). Chaves estrangeiras e unicidade são aplicadas no SQLite.
+Entidades: **Livro** (id, título, autor, gênero, sinopse); **Edição** (id, livro_id, nome, preço_centavos, ano); **Loja** (id, nome, bairro, endereço, horário, pagamentos, serviços, café booleano, eventos); **Estoque** (edicao_id, loja_id, quantidade >= 0, seção); **Avaliação** (id, livro_id, nota 1..5, texto até 500 caracteres, autor, cliente_id opcional); **Promoção** (edicao_id, descrição, desconto_centavos, ativa); **Cliente** (id, nome, email único, bairro, interesses como gêneros); **Favorito** (cliente_id, livro_id); **Reserva** (id, cliente_id, edicao_id, loja_id, código único, estado `confirmada`/`retirada`/`cancelada`, preço_centavos, cupom opcional); **Compra** (id, cliente_id, edicao_id, loja_id, preço_centavos, origem reserva opcional, cupom opcional); **Alerta** (cliente_id, edicao_id, loja_id); **Notificação** (cliente_id, tipo, mensagem); **Cupom** (código único, descrição, tipo `percentual`/`fixo`, valor, ativo). Unicidade e integridade referencial são garantidas pelos casos de uso.
+
+## Arquitetura (Clean)
+
+Quatro anéis, dependências apontando sempre para dentro:
+
+1. `livraria/entidades` — entidades e regras corporativas puras (sem I/O).
+2. `livraria/casos_de_uso` — um caso de uso por operação e as **portas** (interfaces abstratas de repositórios e Unidade de Trabalho). Dependem apenas das entidades.
+3. `livraria/adaptadores` — controladores/apresentadores sem Flask e implementações das portas (registros em memória e em arquivo TXT).
+4. `livraria/frameworks` — Flask, templates, driver de arquivo (gravação atômica + trava) e raiz de composição.
+
+Operações que verificam e alteram estoque executam dentro de uma Unidade de Trabalho: ou todas as alterações são confirmadas, ou nenhuma é gravada.
 
 ## Regras e operações
 
@@ -19,6 +32,10 @@ R04. Cadastro simples exige nome não vazio, email com formato simples `texto@do
 R05. Reserva para retirada exige estoque > 0 naquela loja/edição; transação atômica decrementa uma unidade imediatamente, gera código único `RES-<id com 6 dígitos>` e estado `confirmada`. Confirmar significa mostrar código, loja, seção, preço e estado; confirmação não é compra. Cancelar reserva confirmada repõe uma unidade e muda estado para `cancelada`; retirada de reserva confirmada muda estado para `retirada` e cria uma compra sem novo débito de estoque. Repetir retirada/cancelamento ou retirar reserva de outro cliente falha sem alterar estoque ou criar compra. Não há expiração automática. A compra presencial rápida permite retirar reserva mediante código (somente cliente dono) ou comprar diretamente da loja com estoque; compra direta decrementa uma unidade atomicamente. Histórico inclui compras e reservas, com valores e estados; pontos de fidelidade = soma de `preço_centavos // 100` por compra, sem pontos por reservas não retiradas. Pagamento é **simulação local**: nenhuma cobrança real, compra é registrada como paga na demonstração.
 
 R06. Cliente pode solicitar alerta para edição esgotada em uma loja; alerta duplicado é ignorado. Botão de reposição **simulada** adiciona uma unidade à loja/edição e cria notificação local para assinantes, removendo alertas atendidos. Notificações ficam no banco e aparecem na área do cliente; nenhum email, push ou SMS é enviado. Promoções e recomendações são mostradas na interface, e notificações de promoção são geradas localmente no cadastro como em R04. Nenhuma origem externa de promoções ou avaliações: são dados de demonstração identificados como tais.
+
+R07. Avaliações de clientes: cliente identificado avalia um livro com nota inteira 1..5 e texto opcional de até 500 caracteres; há no máximo uma avaliação por cliente/livro, e reenviar atualiza nota e texto. O detalhe do livro mostra média com uma casa decimal e quantidade de avaliações (incluindo as de demonstração); a área do cliente lista suas avaliações. Nota fora do intervalo, texto longo, livro inexistente ou cliente inválido causam erro de domínio sem gravar.
+
+R08. Cupons de desconto: ao reservar ou comprar diretamente, o cliente pode informar um código de cupom (sem diferenciar caixa; vazio = sem cupom). Cupom `percentual` desconta `preço * valor // 100` centavos; cupom `fixo` desconta `valor` centavos; o desconto incide sobre o preço já promocional e o resultado nunca é negativo. Cada cliente usa um mesmo cupom no máximo uma vez: o uso conta quando a reserva ou compra direta é criada, e cancelar a reserva libera o cupom. Cupom inexistente, inativo ou já usado causa erro de domínio sem debitar estoque. Reserva e compra registram o código do cupom e o preço final; a retirada herda o cupom da reserva; histórico mostra o cupom. Cupons de demonstração: `LEITURA10` (10%), `BEMVINDO5` (R$ 5,00) e `ANTIGO20` (inativo).
 
 ## Critérios de aceite (IDs usados nos testes)
 
@@ -54,3 +71,13 @@ R06. Cliente pode solicitar alerta para edição esgotada em uma loja; alerta du
 
 **C08 — Navegação (R01–R06)**
 - Dado servidor Flask ativo, Quando navego por catálogo → detalhes → estoque por loja → reserva → confirmação, Então todas as ações funcionam via interface; lojas, cadastro, favoritos, compras, histórico, alertas e reposição também têm ações funcionais.
+
+**C09 — Avaliações de clientes (R07)**
+- Dado cliente cadastrado, Quando avalia um livro com nota válida, Então a média e a quantidade do livro são recalculadas e a avaliação aparece na sua área.
+- Dada avaliação existente do mesmo cliente, Quando avalia de novo, Então a avaliação é atualizada sem duplicar.
+- Dada nota fora de 1..5, texto acima de 500 caracteres ou livro inexistente, Quando avalia, Então recebe erro sem gravar.
+
+**C10 — Cupons de desconto (R08)**
+- Dado cupom válido, Quando reserva ou compra com ele, Então o preço registrado é o preço promocional menos o desconto do cupom, arredondado para baixo e nunca negativo, e o código fica registrado.
+- Dado cupom já usado pelo cliente, inexistente ou inativo, Quando tenta usá-lo, Então a operação falha sem debitar estoque.
+- Dada reserva com cupom cancelada, Quando o cliente usa o cupom novamente, Então a operação é aceita.
