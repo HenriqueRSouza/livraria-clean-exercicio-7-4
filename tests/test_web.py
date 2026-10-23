@@ -1,16 +1,16 @@
-"""C08: navegação HTTP real pela interface da demonstração."""
+"""C08–C10: navegação HTTP real pela interface Flask, persistindo em TXT temporário."""
 import tempfile
 import unittest
 from pathlib import Path
 
-from app import create_app
+from livraria.frameworks.web import create_app
 
 
 class FluxoHTTPTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.app = create_app(str(Path(self.tmp.name) / "site.db"))
+        self.app = create_app(str(Path(self.tmp.name) / "site.txt"))
         self.app.testing = True
         self.web = self.app.test_client()
 

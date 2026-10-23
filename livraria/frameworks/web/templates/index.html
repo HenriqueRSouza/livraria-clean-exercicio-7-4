@@ -1,11 +1,11 @@
 <!doctype html>
 <html lang="pt-BR">
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Livraria — demonstração SDD</title>
+<title>Livraria — Arquitetura Clean</title>
 <style>
 body{font:1rem system-ui,sans-serif;max-width:950px;margin:auto;padding:1rem;color:#20252a;background:#f6f7f9}nav a{margin-right:1.4rem}header,article,section{background:white;border-radius:8px;padding:1rem;margin:1rem 0}input,button{padding:.45rem;margin:.2rem}button{cursor:pointer}label{display:inline-block}small{color:#555}.erro{color:#a22}.card{border-top:1px solid #ddd;padding:.6rem 0}h1,h2,h3{color:#234}form{display:inline-block}fieldset{border:1px solid #ddd;margin:.6rem 0}a{color:#12529b}
 </style>
-<header><h1>Livraria · SDD</h1><p><small>Catálogo, promoções, avaliações, compras e notificações de demonstração local. Sem pagamento, localização ou mensagens externas.</small></p>
+<header><h1>Livraria · Clean</h1><p><small>Catálogo, promoções, avaliações, compras e notificações de demonstração local. Sem pagamento, localização ou mensagens externas. Dados persistidos em arquivo TXT local.</small></p>
 <nav><a href="{{ url_for('catalogo') }}">Catálogo</a><a href="{{ url_for('lojas') }}">Lojas</a><a href="{{ url_for('area') }}">{{ 'Minha área' if cliente_atual else 'Cadastro / entrada' }}</a>{% if cliente_atual %}<span>Olá, {{ cliente_atual.nome }}</span><form method="post" action="{{ url_for('sair') }}"><button>Sair</button></form>{% endif %}</nav></header>
 {% for categoria,mensagem in get_flashed_messages(with_categories=true) %}<p class="{{ categoria }}" role="status">{{ mensagem }}</p>{% endfor %}
 <main>
