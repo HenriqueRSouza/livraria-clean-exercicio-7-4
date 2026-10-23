@@ -3,7 +3,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Livraria — Arquitetura Clean</title>
 <style>
-body{font:1rem system-ui,sans-serif;max-width:950px;margin:auto;padding:1rem;color:#20252a;background:#f6f7f9}nav a{margin-right:1.4rem}header,article,section{background:white;border-radius:8px;padding:1rem;margin:1rem 0}input,button{padding:.45rem;margin:.2rem}button{cursor:pointer}label{display:inline-block}small{color:#555}.erro{color:#a22}.card{border-top:1px solid #ddd;padding:.6rem 0}h1,h2,h3{color:#234}form{display:inline-block}fieldset{border:1px solid #ddd;margin:.6rem 0}a{color:#12529b}
+body{font:1rem system-ui,sans-serif;max-width:950px;margin:auto;padding:1rem;color:#20252a;background:#f6f7f9}nav a{margin-right:1.4rem}header,article,section{background:white;border-radius:8px;padding:1rem;margin:1rem 0}input,button,select{padding:.45rem;margin:.2rem}button{cursor:pointer}label{display:inline-block}small{color:#555}.erro{color:#a22}.card{border-top:1px solid #ddd;padding:.6rem 0}h1,h2,h3{color:#234}form{display:inline-block}fieldset{border:1px solid #ddd;margin:.6rem 0}a{color:#12529b}
 </style>
 <header><h1>Livraria · Clean</h1><p><small>Catálogo, promoções, avaliações, compras e notificações de demonstração local. Sem pagamento, localização ou mensagens externas. Dados persistidos em arquivo TXT local.</small></p>
 <nav><a href="{{ url_for('catalogo') }}">Catálogo</a><a href="{{ url_for('lojas') }}">Lojas</a><a href="{{ url_for('area') }}">{{ 'Minha área' if cliente_atual else 'Cadastro / entrada' }}</a>{% if cliente_atual %}<span>Olá, {{ cliente_atual.nome }}</span><form method="post" action="{{ url_for('sair') }}"><button>Sair</button></form>{% endif %}</nav></header>
@@ -15,14 +15,16 @@ body{font:1rem system-ui,sans-serif;max-width:950px;margin:auto;padding:1rem;col
 {% elif pagina == 'livro' %}
 <article><h2>{{ livro.titulo }}</h2><p>{{ livro.autor }} · {{ livro.genero }}</p><p>{{ livro.sinopse }}</p>
 {% if cliente_atual %}<form method="post" action="{{ url_for('favorito',livro_id=livro.id,acao='adicionar') }}"><button>Salvar favorito</button></form>{% endif %}
-<h3>Avaliações de demonstração</h3>{% for a in livro.avaliacoes %}<p>{{ a.nota }}/5 — {{ a.texto }} ({{ a.autor }})</p>{% else %}<p>Ainda sem avaliações.</p>{% endfor %}
-<h3>Compare as edições e a disponibilidade</h3>
+<h3>Avaliações</h3><p>Média: <strong>{{ livro.media|nota_media }}</strong> ({{ livro.total_avaliacoes }} avaliação(ões))</p>
+{% for a in livro.avaliacoes %}<p>{{ a.nota }}/5 — {{ a.texto or 'sem comentário' }} ({{ a.autor }}{{ '' if a.cliente_id else ', demonstração' }})</p>{% else %}<p>Ainda sem avaliações.</p>{% endfor %}
+{% if cliente_atual %}<form method="post" action="{{ url_for('avaliar',livro_id=livro.id) }}"><fieldset><legend>{{ 'Atualizar minha avaliação' if minha_avaliacao else 'Avaliar este livro' }}</legend><label>Nota <select name="nota">{% for n in range(5,0,-1) %}<option value="{{ n }}" {{ 'selected' if minha_avaliacao and minha_avaliacao.nota == n }}>{{ n }}</option>{% endfor %}</select></label><label>Comentário <input name="texto" maxlength="500" value="{{ minha_avaliacao.texto if minha_avaliacao else '' }}"></label><button>Enviar avaliação</button></fieldset></form>{% else %}<p><small>Entre na sua área para avaliar.</small></p>{% endif %}
+<h3>Compare as edições e a disponibilidade</h3><p><small>Cupons de demonstração: LEITURA10 (10%) e BEMVINDO5 (R$ 5,00), uma vez por cliente.</small></p>
 {% for ed in livro.edicoes %}<fieldset><legend>{{ ed.nome }} ({{ ed.ano }})</legend><p>Preço: {{ ed.preco_centavos|reais }} · Valor atual: {{ ed.preco_final_centavos|reais }}</p>
 {% for promo in ed.promocoes %}<p>Promoção de demonstração: {{ promo.descricao }} (−{{ promo.desconto_centavos|reais }})</p>{% endfor %}
 {% for s in ed.estoques %}<div class="card"><strong>{{ s.loja_nome }}</strong> · Seção {{ s.secao }} · {{ s.quantidade }} disponível(is)
 {% if s.quantidade > 0 %}
-<form method="post" action="{{ url_for('reservar') }}"><input type="hidden" name="edicao_id" value="{{ ed.id }}"><input type="hidden" name="loja_id" value="{{ s.loja_id }}"><button>Reservar para retirada</button></form>
-<form method="post" action="{{ url_for('comprar') }}"><input type="hidden" name="edicao_id" value="{{ ed.id }}"><input type="hidden" name="loja_id" value="{{ s.loja_id }}"><button>Compra presencial simulada</button></form>
+<form method="post" action="{{ url_for('reservar') }}"><input type="hidden" name="edicao_id" value="{{ ed.id }}"><input type="hidden" name="loja_id" value="{{ s.loja_id }}"><input name="cupom" placeholder="Cupom (opcional)" size="14"><button>Reservar para retirada</button></form>
+<form method="post" action="{{ url_for('comprar') }}"><input type="hidden" name="edicao_id" value="{{ ed.id }}"><input type="hidden" name="loja_id" value="{{ s.loja_id }}"><input name="cupom" placeholder="Cupom (opcional)" size="14"><button>Compra presencial simulada</button></form>
 {% else %}<form method="post" action="{{ url_for('alertar') }}"><input type="hidden" name="edicao_id" value="{{ ed.id }}"><input type="hidden" name="loja_id" value="{{ s.loja_id }}"><button>Avisar reposição (local)</button></form>{% endif %}
 <form method="post" action="{{ url_for('repor') }}"><input type="hidden" name="edicao_id" value="{{ ed.id }}"><input type="hidden" name="loja_id" value="{{ s.loja_id }}"><button>Simular +1 no estoque</button></form></div>{% endfor %}</fieldset>{% endfor %}</article>
 {% elif pagina == 'lojas' %}
@@ -33,10 +35,11 @@ body{font:1rem system-ui,sans-serif;max-width:950px;margin:auto;padding:1rem;col
 <h3>Já cadastrou?</h3><form method="post" action="{{ url_for('entrar') }}"><label>Email <input name="email" type="email" required></label><button>Entrar</button></form></section>
 {% elif pagina == 'cliente' %}
 <section><h2>Minha área · {{ cliente_atual.nome }}</h2><p>{{ cliente_atual.email }} · {{ cliente_atual.bairro }} · Interesses: {{ cliente_atual.interesses or 'nenhum' }}</p><p>Fidelidade: <strong>{{ historico.pontos }} pontos</strong> (somente compras concluídas)</p>
-<h3>Reservas e códigos para retirada</h3>{% for r in historico.reservas %}<div class="card">{{ r.codigo }} · {{ r.titulo }} / {{ r.edicao }} · {{ r.loja }} · Seção {{ r.secao }} · {{ r.preco_centavos|reais }} · {{ r.estado }}
+<h3>Reservas e códigos para retirada</h3>{% for r in historico.reservas %}<div class="card">{{ r.codigo }} · {{ r.titulo }} / {{ r.edicao }} · {{ r.loja }} · Seção {{ r.secao }} · {{ r.preco_centavos|reais }}{% if r.cupom %} (cupom {{ r.cupom }}){% endif %} · {{ r.estado }}
 {% if r.estado == 'confirmada' %}<form method="post" action="{{ url_for('reserva_acao',codigo=r.codigo,acao='retirar') }}"><button>Agilizar compra: retirar com código</button></form><form method="post" action="{{ url_for('reserva_acao',codigo=r.codigo,acao='cancelar') }}"><button>Cancelar reserva</button></form>{% endif %}</div>{% else %}<p>Sem reservas.</p>{% endfor %}
-<h3>Histórico de compras (pagamento simulado)</h3>{% for c in historico.compras %}<p>#{{ c.id }} · {{ c.titulo }} / {{ c.edicao }} · {{ c.loja }} · {{ c.preco_centavos|reais }}</p>{% else %}<p>Sem compras.</p>{% endfor %}
+<h3>Histórico de compras (pagamento simulado)</h3>{% for c in historico.compras %}<p>#{{ c.id }} · {{ c.titulo }} / {{ c.edicao }} · {{ c.loja }} · {{ c.preco_centavos|reais }}{% if c.cupom %} (cupom {{ c.cupom }}){% endif %}</p>{% else %}<p>Sem compras.</p>{% endfor %}
 <h3>Favoritos</h3>{% for b in favoritos %}<p><a href="{{ url_for('livro',livro_id=b.id) }}">{{ b.titulo }}</a> <form method="post" action="{{ url_for('favorito',livro_id=b.id,acao='remover') }}"><button>Remover favorito</button></form></p>{% else %}<p>Nenhum favorito.</p>{% endfor %}
+<h3>Minhas avaliações</h3>{% for a in avaliacoes %}<p><a href="{{ url_for('livro',livro_id=a.livro_id) }}">{{ a.titulo }}</a> · {{ a.nota }}/5 — {{ a.texto or 'sem comentário' }}</p>{% else %}<p>Você ainda não avaliou livros.</p>{% endfor %}
 <h3>Recomendações locais por interesse</h3>{% for b in recomendacoes %}<p><a href="{{ url_for('livro',livro_id=b.id) }}">{{ b.titulo }}</a></p>{% else %}<p>Sem recomendações no catálogo de demonstração.</p>{% endfor %}
 <h3>Notificações locais</h3>{% for n in notificacoes %}<p>{{ n.tipo }}: {{ n.mensagem }}</p>{% else %}<p>Nenhuma notificação.</p>{% endfor %}</section>
 {% endif %}
