@@ -16,7 +16,6 @@ Continuação da livraria do exercício 6, reorganizada em **Arquitetura Clean**
 
 ## Arquitetura
 
-![Arquitetura Clean](docs/arquitetura.png)
 
 ```
 app.py              -> monta tudo: RepositorioTxt -> casos de uso -> controller -> Flask
